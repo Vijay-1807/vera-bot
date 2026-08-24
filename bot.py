@@ -21,7 +21,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/")
-        if path == "/v1/healthz":
+        if path == "":
+            self.respond(200, {
+                "name": "Vera Signal Foundry",
+                "status": "ready",
+                "healthz": "/v1/healthz",
+                "metadata": "/v1/metadata",
+            })
+        elif path == "/v1/healthz":
             self.respond(200, ENGINE.store.health())
         elif path == "/v1/metadata":
             self.respond(200, config.metadata())
