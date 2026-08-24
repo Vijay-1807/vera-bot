@@ -19,6 +19,15 @@ ENGINE = Engine()
 class Handler(BaseHTTPRequestHandler):
     server_version = "Vera/1.0"
 
+    def do_HEAD(self):
+        path = urlparse(self.path).path.rstrip("/")
+        status = 200 if path in {"", "/v1/healthz", "/v1/metadata"} else 404
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+
     def do_GET(self):
         path = urlparse(self.path).path.rstrip("/")
         if path == "":

@@ -5,4 +5,4 @@ reproducible, sub-millisecond, and structurally incapable of hallucinating a fac
 that is not in the pushed context.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

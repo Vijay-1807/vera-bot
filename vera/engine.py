@@ -104,6 +104,9 @@ class Engine:
             trigger = self.store.trigger(trigger_id)
             if not isinstance(trigger, dict):
                 continue
+            if self._contradicted_by_fresher_context(trigger):
+                self.store.bump("holds")
+                continue
             result, reason = self.compose(trigger, now)
             if result is None:
                 self.store.bump("holds")
@@ -250,6 +253,22 @@ class Engine:
         customer_bonus = 0.08 if trigger.get("customer_id") else 0
         return round(value * 0.68 + urgency * 0.24 + customer_bonus, 4)
 
+    def _contradicted_by_fresher_context(self, trigger):
+        """Drop stale performance alerts when the latest snapshot reversed direction."""
+        kind = str(trigger.get("kind") or "")
+        if kind not in {"perf_dip", "perf_spike"}:
+            return False
+        merchant = self.store.get("merchant", trigger.get("merchant_id")) or {}
+        current = (merchant.get("performance") or {}).get("delta_7d") or {}
+        payload = trigger.get("payload") if isinstance(trigger.get("payload"), dict) else {}
+        metric = str(payload.get("metric") or "calls").lower()
+        latest = current.get(f"{metric}_pct")
+        event = payload.get("delta_pct")
+        if not isinstance(latest, (int, float)) or not isinstance(event, (int, float)):
+            return False
+        return (kind == "perf_dip" and latest > 0 and event < 0) or (
+            kind == "perf_spike" and latest < 0 and event > 0)
+
     @staticmethod
     def _conversation_id(facts, draft, suppression_key):
         subject = facts.customer_name or facts.owner_first or facts.merchant_id
@@ -279,8 +298,22 @@ class Engine:
         audience = topic.get("audience")
         if audience == "customer":
             return "Confirmed. The merchant team has your reply and will take the next step from here."
-        return (f"On it. I have moved this to execution: {pending}. "
-                "I will keep it grounded in the details already on file and bring back the finished draft for approval.")
+        label = str(topic.get("topic") or "")
+        if label.startswith("research:"):
+            return ("Draft ready: explain the finding in plain language, name who it applies to, "
+                    "and invite them to ask whether their recall interval should change. I have "
+                    "kept the research claim source-led and avoided promising an outcome.")
+        if label.startswith(("perf_dip:", "seasonal_dip:")):
+            return (f"Starting with the agreed move: {pending}. I will use the measured change "
+                    "as the baseline and change one lever first, so the next result is attributable.")
+        if label.startswith(("planning:", "festival:")):
+            return (f"The structure is ready. To finish it without inventing your economics, send "
+                    f"me {pending}; I will return the customer-facing version in one pass.")
+        if label.startswith(("supply_alert", "regulation:")):
+            return (f"Action sequence ready: isolate the affected item, verify the record, then "
+                    f"{pending}. Nothing customer-facing goes out until the affected list is verified.")
+        return (f"Committed. The next action is {pending}; I will use only the details already on "
+                "file and return the finished version for approval.")
 
     @staticmethod
     def _send_reply(conversation, body, cta, rationale, now):

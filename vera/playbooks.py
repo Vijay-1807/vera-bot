@@ -354,7 +354,7 @@ def pb_perf_dip(f, v):
         return None
     move = f.trust(pct_points(delta))
 
-    arc = f"your {metric} are down {move.lstrip('+')}"
+    arc = f"your {metric} are down {move.lstrip('+-')}"
     if baseline:
         landed = baseline * (1.0 + float(delta))
         f.register(baseline, landed, round(landed))
@@ -393,7 +393,7 @@ def pb_seasonal_perf_dip(f, v):
     metric = f.payload_text("metric") or "views"
     delta = f.payload_number("delta_pct")
     window = f.payload_text("window") or "week"
-    move = f.trust(pct_points(delta)).lstrip("+") if delta is not None else None
+    move = f.trust(pct_points(delta)).lstrip("+-") if delta is not None else None
     beat = f.seasonal_note()
     item = f.best_digest(("seasonal",))
     note = (beat or {}).get("note") or _evidence(f, item, 30)
@@ -479,7 +479,9 @@ def pb_milestone_reached(f, v):
         return None
     gap = target - now_value
     f.register(gap, abs(gap))
-    label = humanise_slug(metric).replace("count", "").strip() or "reviews"
+    label = humanise_slug(metric).replace("count", "").strip() or "review"
+    if label == "review" and now_value != 1:
+        label = "reviews"
 
     body = v.assemble([
         f"{_greet(v)}, you're at {grouped(now_value)} {label} — {_spell(gap)} short of "
@@ -571,7 +573,7 @@ def pb_winback_eligible(f, v):
         lines.append(head + ".")
 
     if dip is not None:
-        tail = f"Views are down {f.trust(pct_points(dip)).lstrip('+')} too, but that's a "
+        tail = f"Views are down {f.trust(pct_points(dip)).lstrip('+-')} too, but that's a "
         tail += "symptom." + (f" The {grouped(added)} are the money." if added else "")
         lines.append(tail)
 
